@@ -3,3 +3,8 @@
 *.ipynb
 slurm-*.out
 wandb
+data
+tokenizer
+output
+.dump
+__pycache__
