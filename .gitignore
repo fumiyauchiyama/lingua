@@ -7,4 +7,5 @@ data
 tokenizer
 output
 .dump
+dump
 __pycache__
