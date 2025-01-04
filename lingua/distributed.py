@@ -438,12 +438,17 @@ def parallelize_model(
 
         if fsdp_grouping_plan is None:
             # Assume that the model has list of layers and group around it
-            fsdp_grouping_plan = default_fsdp_grouping_plan(len(model.layers))
+            fsdp_grouping_plan = default_fsdp_grouping_plan(
+                len(model.layers) if hasattr(model, "layers") else model_args.n_layers
+            )
 
         for path, reshard_after_forward in fsdp_grouping_plan:
-            module = get_module(model, path)
+            module = get_module(
+                model if hasattr(model, "layers") else model.model, 
+                path
+                )
             set_module(
-                model,
+                model if hasattr(model, "layers") else model.model, 
                 path,
                 fully_shard(
                     module, **fsdp_config, reshard_after_forward=reshard_after_forward

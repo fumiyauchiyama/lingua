@@ -472,6 +472,9 @@ def find_and_sanitize_chunks(dataset_path: str, world_size: int):
     if n_chunks > world_size:
         n_discard = n_chunks - world_size
         dataset_chunks = dataset_chunks[:world_size]
+        logger.warning(
+            f"Discarding {n_discard} chunks to match world size {world_size}"
+        )
     else:
         assert (
             world_size % n_chunks == 0

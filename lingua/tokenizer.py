@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import List, Optional, Tuple
 import logging
 import os
+import unicodedata
 
 from sentencepiece import SentencePieceProcessor
 import tiktoken
@@ -185,6 +186,61 @@ class TikTokenTokenizer(Tokenizer):
             text_len += sum(1 for c in token if not 0x80 <= c < 0xC0)
         substrs = [text[s:e] for s, e in zip(offsets, offsets[1:] + [None])]
         return substrs, offsets
+    
+
+class PolyEncryptedTokenizer(Tokenizer):
+    def __init__(self):
+        self.symbols = [chr(code_point) for code_point in range(0x024F+1) if unicodedata.category(chr(code_point)) not in {'Cc', 'Cf', 'Cs', 'Co', 'Cn'}]
+        self.symbol2index = {symbol:i for i,symbol in enumerate(self.symbols)}
+
+        self.unk_id = len(self.symbols)
+        self.bos_id = len(self.symbols) + 1
+        self.eos_id = len(self.symbols) + 2
+        self.n_words = len(self.symbols) + 3
+
+    def encode(self, s: str, add_bos: bool = False, add_eos: bool = False):
+        tokens = [self.bos_id] * add_bos
+        for char in s:
+            tokens.append(self.symbol2index.get(char, self.unk_id))
+        tokens += [self.eos_id] * add_eos
+        return tokens
+
+    def decode(self, tokens: List[int]):
+        s = ""
+        for token in tokens:
+            if token == self.eos_id:
+                break
+            elif token == self.unk_id:
+                s += "?"
+            elif token < len(self.symbols):
+                s += self.symbols[token]
+        return s
+
+    def get_token_offsets(
+        self, text: str, tokens: Optional[List[int]] = None
+    ) -> Tuple[List[str], List[int]]:
+        if tokens is None:
+            tokens = self.encode(text)
+
+        decoded_chars, offsets = [], []
+        char_pos = 0
+        for token in tokens:
+            if token == self.bos_id or token == self.eos_id:
+                # BOS/EOSは無視、オフセットも増やさない
+                continue
+            elif token == self.unk_id:
+                # UNKを"?"などにするか、あるいは無視するか
+                decoded_chars.append("?")
+                offsets.append(char_pos)
+                char_pos += 1
+            elif 0 <= token < len(self.symbols):
+                decoded_chars.append(self.symbols[token])
+                offsets.append(char_pos)
+                char_pos += 1
+            else:
+                pass
+
+        return decoded_chars, offsets
 
 
 def build_tokenizer(name: str, path: Optional[str] = None) -> Tokenizer:
@@ -196,5 +252,7 @@ def build_tokenizer(name: str, path: Optional[str] = None) -> Tokenizer:
         return SentencePieceTokenizer(path)
     elif name == "tiktoken":
         return TikTokenTokenizer(path)
+    elif name == "poly":
+        return PolyEncryptedTokenizer()
     else:
         raise NotImplementedError(f"{name} tokenizer type is not implemented")
