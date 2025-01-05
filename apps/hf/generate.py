@@ -153,7 +153,7 @@ class HFCausalGenerator:
         self.device = cfg.device
 
         self.show_progress = cfg.show_progress
-        self.dtype = dict(fp32=torch.float32, bf16=torch.bfloat16)[cfg.dtype]
+        self.dtype = dict(fp32=torch.float32, bf16=torch.bfloat16, fp16=torch.float16)[cfg.dtype]
 
         self.model.generation_config.bos_token_id = self.tokenizer.bos_id
         self.model.generation_config.eos_token_id = self.tokenizer.eos_id

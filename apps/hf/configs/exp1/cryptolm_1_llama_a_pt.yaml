@@ -13,7 +13,7 @@ optim:
 distributed:
   fsdp_type: full_shard
   compile: false
-  model_dtype: fp16
+  model_dtype: bf16
   matmul_allow_tf32: false
   selective_activation_checkpointing: false
   dp_shard: 2
@@ -75,4 +75,4 @@ eval:
       - winogrande
   generator:
     max_tokens: 4096
-    dtype: fp16
+    dtype: bf16
