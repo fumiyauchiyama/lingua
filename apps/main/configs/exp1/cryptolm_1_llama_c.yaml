@@ -1,6 +1,6 @@
 dump_dir: dump/cryptolm_1_llama_c
 steps: 240_313
-probe_freq: null
+probe_freq: 100
 seed: 0
 
 optim:
@@ -20,16 +20,10 @@ distributed:
   tp_size: 1
 
 model:
-  model_name: meta-llama/Meta-Llama-3-8B
-  model_args:
-    hidden_size: 1024
-    intermediate_size : 2048
-    num_hidden_layers: 16
-    num_attention_heads: 16
-    max_position_embeddings: 2048
-    vocab_size: 529
-    bos_token_id: 527
-    eos_token_id: 528
+  dim: 1024
+  n_layers: 16
+  n_heads: 16
+  max_seqlen: 2048
 
 data:
   root_dir: /home/uchiyama.fumiya/ucllm/cryptollm/working_dir/datatrove/extract_names_from_fwe10b

@@ -1,6 +1,6 @@
 dump_dir: dump/cryptolm_1_llama_a_pt
 steps: 241_216
-probe_freq: 100
+probe_freq: null
 seed: 0
 
 optim:
