@@ -12,6 +12,7 @@ from torch.nn import functional as F
 import xformers
 
 from lingua.args import dataclass_from_dict
+from lingua.distributed import get_is_master
 from lingua.checkpoint import CONSOLIDATE_NAME
 from lingua.tokenizer import Tokenizer, build_tokenizer
 
@@ -210,23 +211,27 @@ class HFCausalGenerator:
         return generation, loglikelihood, greedy
     
 
-def load_consolidated_model_and_tokenizer(
+def save_consolidated_model_and_tokenizer(
     consolidated_path,
     model_args_cls=HFCausalLMArgs,
 ):
     ckpt_path = Path(consolidated_path)
-    config = ckpt_path / "params.json"
-    config = OmegaConf.load(config)
+    save_dir = ckpt_path.parent / "hf"
 
-    param_dtype = dict(fp32=torch.float32, fp16=torch.float16, bf16=torch.bfloat16)[
-        config.distributed.model_dtype
-    ]
-    model_args = dataclass_from_dict(model_args_cls, config.model, strict=False)
-    tokenizer = build_tokenizer(config.data.tokenizer.name, config.data.tokenizer.path)
-    model, _ = get_hf_model(model_args)
-    st_dict = torch.load(ckpt_path / CONSOLIDATE_NAME, weights_only=True)
-    model.load_state_dict(st_dict["model"])
-    model = model.cuda().eval()
-    for param in model.parameters():
-        param.data = param.data.to(dtype=param_dtype)
-    return model, tokenizer
+    if get_is_master():
+        config = ckpt_path / "params.json"
+        config = OmegaConf.load(config)
+
+        model_args = dataclass_from_dict(model_args_cls, config.model, strict=False)
+        tokenizer = build_tokenizer(config.data.tokenizer.name, config.data.tokenizer.path)
+        model, _ = get_hf_model(model_args)
+        st_dict = torch.load(ckpt_path / CONSOLIDATE_NAME, weights_only=True)
+        model.load_state_dict(st_dict["model"])
+
+        # save model as HF format
+        model.save_pretrained(save_dir)
+        tokenizer.tokenizer.save_pretrained(save_dir)
+
+    torch.distributed.barrier()
+
+    return str(save_dir)

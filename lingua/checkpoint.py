@@ -40,6 +40,7 @@ RE_FOLDER = r"\d{10}"
 RE_CKPT = r"__\d_\d\.distcp"
 
 CONSOLIDATE_FOLDER = "consolidated"
+HF_CONSOLIDATE_FOLDER = "hf"
 CONSOLIDATE_NAME = "consolidated.pth"
 
 CONFIG_NAME = "params.json"
@@ -144,7 +145,7 @@ class CheckpointManager:
                     if file.is_file():
                         file.unlink()
                     elif file.is_dir():
-                        assert file.name in [CONSOLIDATE_FOLDER]
+                        assert file.name in [CONSOLIDATE_FOLDER, HF_CONSOLIDATE_FOLDER]
                         for f in file.iterdir():
                             f.unlink()
                         file.rmdir()

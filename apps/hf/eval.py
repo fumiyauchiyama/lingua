@@ -15,7 +15,7 @@ import torch
 from apps.hf.generate import (
     HFCausalGeneratorArgs,
     HFCausalGenerator,
-    load_consolidated_model_and_tokenizer
+    save_consolidated_model_and_tokenizer
 )
 from apps.hf.transformer import HFCausalLMArgs
 from lingua.args import dump_config
@@ -173,16 +173,17 @@ def launch_eval(cfg: EvalArgs):
     consolidate_path = str(consolidate_path)
     torch.distributed.barrier()
     logger.info("Loading model")
-    model, tokenizer = load_consolidated_model_and_tokenizer(
+    hf_save_dir = save_consolidated_model_and_tokenizer(
         consolidate_path,
         model_args_cls=HFCausalLMArgs,
     )
-    logger.info("Model loaded")
-    model.eval()
-    generator = HFCausalGenerator(cfg.generator, model, tokenizer)
-
-    wrap = EvalHarnessLM(generator)
+    param_dtype = dict(fp32='float32', fp16='float16', bf16='bfloat16')[
+        cfg.generator.dtype
+    ]
+    wrap = HFLM(pretrained=hf_save_dir, dtype=param_dtype)
     results = simple_evaluate(wrap, **asdict(cfg.harness))
+    if results is not None:
+        results['config']['model_dtype'] = str(results['config']['model_dtype'])
     if get_global_rank() == 0:
         with open(Path(cfg.dump_dir) / "results.json", "w") as f:
             f.write(json.dumps(results))
@@ -201,7 +202,6 @@ def launch_eval(cfg: EvalArgs):
             file=open(metric_log_path, mode="a"),
             flush=True,
         )
-    del generator
 
 
 def main():

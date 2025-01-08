@@ -12,6 +12,7 @@ import unicodedata
 from sentencepiece import SentencePieceProcessor
 import tiktoken
 from tiktoken.load import load_tiktoken_bpe
+from transformers import AutoTokenizer
 
 logger = logging.getLogger(__name__)
 
@@ -243,6 +244,54 @@ class PolyEncryptedTokenizer(Tokenizer):
         return decoded_chars, offsets
 
 
+class HFTokenizer(Tokenizer):
+    def __init__(self, model: str) -> None:
+        self.tokenizer = AutoTokenizer.from_pretrained(model)
+        self.n_words: int = len(self.tokenizer)
+
+    def encode(self, s: str, add_bos: bool = False, add_eos: bool = False):
+        tokens = [self.tokenizer.bos_token_id] * add_bos + self.tokenizer.encode(s, add_special_tokens=False) + [self.tokenizer.eos_token_id] * add_eos
+        return tokens
+
+    def decode(self, tokens: List[int]):
+        return self.tokenizer.decode(tokens, skip_special_tokens=True)
+
+    def get_token_offsets(
+        self, text: str, tokens: Optional[List[int]] = None
+    ) -> Tuple[List[str], List[int]]:
+
+        encoding = self.tokenizer(
+            text,
+            add_special_tokens=False,
+            return_offsets_mapping=True
+        )
+        offset_mapping = encoding["offset_mapping"]
+        input_ids = encoding["input_ids"]
+
+        if tokens is not None:
+            if self.tokenizer.bos_token_id in tokens:
+                tokens.remove(self.tokenizer.bos_token_id)
+            if self.tokenizer.eos_token_id in tokens:
+                tokens.remove(self.tokenizer.eos_token_id)
+            if input_ids != tokens:
+                logger.warning(
+                    f"given tokens and self.tokenizer(text) are different. \n"
+                    f"tokens: {tokens}\n"
+                    f"self.tokenizer(text): {input_ids}"
+                )
+
+        token_strs = []
+        offsets = []
+
+        for i, tid in enumerate(input_ids):
+            start, end = offset_mapping[i]
+            token_str = text[start:end]
+            token_strs.append(token_str)
+            offsets.append(start)
+
+        return token_strs, offsets
+
+
 def build_tokenizer(name: str, path: Optional[str] = None) -> Tokenizer:
     if name == "bytes":
         return ByteTokenizer()
@@ -254,5 +303,7 @@ def build_tokenizer(name: str, path: Optional[str] = None) -> Tokenizer:
         return TikTokenTokenizer(path)
     elif name == "poly":
         return PolyEncryptedTokenizer()
+    elif name == "hf":
+        return HFTokenizer(path)
     else:
         raise NotImplementedError(f"{name} tokenizer type is not implemented")

@@ -12,5 +12,5 @@ viztracer
 lm-eval
 scipy
 pynvml
-datatrove
+datatrove==0.3.0
 orjson
