@@ -149,11 +149,18 @@ def get_is_slurm_job() -> bool:
 
 
 @lru_cache()
+def get_is_mpi_run() -> bool:
+    return "OMPI_COMM_WORLD_SIZE" in os.environ and not get_is_slurm_job()
+
+
+@lru_cache()
 def get_global_rank() -> int:
     if get_is_torch_run():
         return int(os.environ["RANK"])
     elif get_is_slurm_job():
         return int(os.environ["SLURM_PROCID"])
+    elif get_is_mpi_run():
+        return int(os.environ["OMPI_COMM_WORLD_RANK"])
     else:
         return 0
 
@@ -164,6 +171,8 @@ def get_local_rank() -> int:
         return int(os.environ["LOCAL_RANK"])
     elif get_is_slurm_job():
         return int(os.environ["SLURM_LOCALID"])
+    elif get_is_mpi_run():
+        return int(os.environ["OMPI_COMM_WORLD_LOCAL_RANK"])
     else:
         return 0
 
@@ -174,6 +183,8 @@ def get_world_size() -> int:
         return int(os.environ["WORLD_SIZE"])
     elif get_is_slurm_job():
         return int(os.environ["SLURM_NTASKS"])
+    elif get_is_mpi_run():
+        return int(os.environ["OMPI_COMM_WORLD_SIZE"])
     else:
         return 1
 
@@ -202,6 +213,10 @@ def get_master_addr() -> str:
             ["scontrol", "show", "hostnames", os.environ["SLURM_JOB_NODELIST"]]
         )
         return hostnames.split()[0].decode("utf-8")
+    elif get_is_mpi_run():
+        # FIXME: MASTER_ADDR is set to localhost for now. Not available for multiple nodes.
+        logger.warning("MPI run detected, MASTER_ADDR is set to localhost")
+        return "127.0.0.1"
     else:
         return "127.0.0.1"
 
@@ -249,14 +264,21 @@ def setup_torch_distributed(dist_args):
     os.environ["RANK"] = str(get_global_rank())
     os.environ["WORLD_SIZE"] = str(get_world_size())
     os.environ["MASTER_ADDR"] = get_master_addr()
+    job_id = int(os.environ.get("SLURM_JOB_ID", -1))
+    if job_id == -1:
+        if get_is_mpi_run():
+            # FIXME: Thi is only for Wisteria MPI runs. Need to generalize
+            job_id = int(os.environ.get("PJM_JOBID", -1))
     os.environ["MASTER_PORT"] = str(
-        get_master_port(job_id=int(os.environ.get("SLURM_JOB_ID", -1)))
+        get_master_port(job_id=job_id)
     )
 
     if get_is_torch_run():
         logger.info(f"Run launched with torchrun, local rank: {local_rank}")
     elif get_is_slurm_job():
         logger.info(f"Run launched with slurm, local rank: {local_rank}")
+    elif get_is_mpi_run():
+        logger.info(f"Run launched with MPI, local rank: {local_rank}")
     else:
         logger.info("Single GPU job")
 

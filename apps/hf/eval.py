@@ -173,14 +173,11 @@ def launch_eval(cfg: EvalArgs):
     consolidate_path = str(consolidate_path)
     torch.distributed.barrier()
     logger.info("Loading model")
-    hf_save_dir = save_consolidated_model_and_tokenizer(
+    model, tokenizer = save_consolidated_model_and_tokenizer(
         consolidate_path,
         model_args_cls=HFCausalLMArgs,
     )
-    param_dtype = dict(fp32='float32', fp16='float16', bf16='bfloat16')[
-        cfg.generator.dtype
-    ]
-    wrap = HFLM(pretrained=hf_save_dir, dtype=param_dtype)
+    wrap = HFLM(pretrained=model, tokenizer=tokenizer)
     results = simple_evaluate(wrap, **asdict(cfg.harness))
     if results is not None:
         results['config']['model_dtype'] = str(results['config']['model_dtype'])
@@ -202,6 +199,7 @@ def launch_eval(cfg: EvalArgs):
             file=open(metric_log_path, mode="a"),
             flush=True,
         )
+    del wrap, model, tokenizer, results
 
 
 def main():
