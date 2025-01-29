@@ -6,7 +6,7 @@ from typing import Optional
 import torch
 from torch import nn
 
-from lingua.transformer import RMSNorm, cross_entropy
+from lingua.transformer import RMSNorm, TiedLinear, cross_entropy
 from apps.fastRNN.minLSTM.core_lstm import BaseMinLSTMArgs, BaseMinLSTM
 
 
@@ -34,28 +34,27 @@ class LMMinLSTM(BaseMinLSTM):
 
         self.norm = RMSNorm(args.dim, eps=args.norm_eps)
 
-        self.output = nn.Linear(
-            args.dim,
-            args.vocab_size,
-            bias=False,
-        )
-
         if args.weight_tying:
-            self.output.weight = self.embeddings.tok_embeddings.weight
-
-        self.init_weights()
+            self.output = TiedLinear(self.tok_embeddings)
+        else:
+            self.output = nn.Linear(
+                args.dim,
+                args.vocab_size,
+                bias=False,
+            )
 
     def forward(
         self,
         token_values: torch.Tensor,
         target: Optional[torch.Tensor] = None,
+        tok_idx: Optional[torch.Tensor] = None,
         cu_seqlens: Optional[int] = None,
         impl: str = "parallel",
     ) -> torch.Tensor:
 
         h = self.tok_embeddings(token_values)
 
-        h = super().forward(h, cu_seqlens=cu_seqlens, impl=impl)
+        h = super().forward(h, tok_idx=tok_idx, cu_seqlens=cu_seqlens, impl=impl)
 
         logits = self.output(self.norm(h))
         if target is not None:

@@ -336,6 +336,10 @@ def check_model_value_range(
         if isinstance(param, DTensor):
             param = param.to_local()
 
+        if param.numel() == 0:
+            logger.warning(f"Model parameter {name} is empty, probably because of FSDP sharding")
+            continue
+
         if torch.isnan(param).any() or torch.isinf(param).any():
             logger.warning(f"Model parameter {name} contains NaN or Inf")
 
@@ -494,6 +498,6 @@ def parallelize_model(
         torch._dynamo.config.cache_size_limit = (
             distributed_args.compile_cache_size_limit
         )
-        model = torch.compile(model)
+        model.compile()
 
     return model

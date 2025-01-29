@@ -22,7 +22,7 @@ flex_attention_comp = torch.compile(flex_attention)
 class InitStdFactor(Enum):
     DISABLED = "disabled"  # Init std is divided by 1.0
     GLOBAL_DEPTH = "global_depth"  # Init std is divided by sqrt(2*n_layers)
-    CURRENT_DEPTH = "current_depth"  # Init std is divided by sqrt(2*deoth)
+    CURRENT_DEPTH = "current_depth"  # Init std is divided by sqrt(2*depth)
     DIM_RATIO = "dim_ratio"  # Init std is divided by model_dim/4096
 
 
@@ -291,6 +291,17 @@ class RMSNorm(nn.Module):
     def reset_parameters(self):
         torch.nn.init.ones_(self.weight)  # type: ignore
 
+class TiedLinear(nn.Module):
+    def __init__(self, tied_module: nn.Module) -> None:
+        super().__init__()
+        self.tied_module = tied_module
+        if not hasattr(tied_module, "weight"):
+            raise AttributeError(
+                "Provided module does not have attribute 'weight'. Please check your tied_module."
+            )
+
+    def __call__(self, x: torch.Tensor) -> torch.Tensor:
+        return F.linear(x, self.tied_module.weight)
 
 class Attention(nn.Module):
     def __init__(
@@ -398,9 +409,8 @@ class Attention(nn.Module):
 
     def reset_parameters(self, init_std=None, factor=1.0):
         init_std = init_std or (self.dim ** (-0.5))
-        init_std = init_std / factor
 
-        for w in [self.wq, self.wk, self.wv, self.wo]:
+        for w in [self.wq, self.wk, self.wv]:
             nn.init.trunc_normal_(
                 w.weight,
                 mean=0.0,
@@ -408,6 +418,14 @@ class Attention(nn.Module):
                 a=-3 * init_std,
                 b=3 * init_std,
             )
+
+        nn.init.trunc_normal_(
+            self.wo.weight,
+            mean=0.0,
+            std=init_std / factor,
+            a=-3 * init_std,
+            b=3 * init_std,
+        )
 
 
 class FeedForward(nn.Module):
@@ -456,7 +474,7 @@ class FeedForward(nn.Module):
     def reset_parameters(self, init_std=None, factor=1.0):
         in_init_std = init_std or (self.dim ** (-0.5))
         out_init_std = init_std or (self.hidden_dim ** (-0.5))
-        in_init_std = in_init_std / factor
+        in_init_std = in_init_std
         out_init_std = out_init_std / factor
         for w in [self.w1, self.w3]:
             nn.init.trunc_normal_(
