@@ -10,3 +10,4 @@ output
 dump
 __pycache__
 .venv
+core.*

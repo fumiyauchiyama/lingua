@@ -1,0 +1,78 @@
+dump_dir: dump/exp2_cryptolm_1_llama_b_pt
+steps: 241_216
+probe_freq: null
+seed: 0
+
+optim:
+  lr: 3e-4
+  weight_decay: 0.033
+  warmup: 5000
+  lr_min_ratio: 0.000001
+  clip: 1.0
+
+distributed:
+  fsdp_type: full_shard
+  compile: false
+  model_dtype: bf16
+  matmul_allow_tf32: false
+  selective_activation_checkpointing: false
+  dp_shard: 2
+  tp_size: 1
+
+model:
+  dim: 1024
+  n_layers: 12
+  n_heads: 16
+
+data:
+  root_dir: /work/gb20/i16152/data/cryptollm
+  sources:
+      data_dropped_chunked: 18051.0
+      data_final_0.5_pretrain_chunked: 4806260.0
+  batch_size: 24
+  prefetch_size: 48
+  seq_len: 2048
+  n_views: 2
+  load_async: true
+  add_bos: true
+  add_eos: true
+  tokenizer:
+    name: sp
+    path: /work/gb20/i16152/data/cryptollm/tokenizer/sp_model_pt_plain/sp_model_pt_plain.model
+
+profiling:
+  run: true
+  mem_warmup: 0
+  mem_steps: 4
+  profile_warmup: 100
+  profile_steps: 4
+
+checkpoint:
+  dump:
+    every: 2500
+    keep: 3
+  eval:
+    every: 5000
+    keep: 1
+
+logging:
+    freq: 10
+    wandb:
+        project: "cryptollm-lingua"
+
+eval:
+  harness:
+    tasks:
+      - hellaswag
+      - piqa
+      - openbookqa
+      - winogrande
+  generator:
+    max_tokens: 4096
+    dtype: bf16
+  validation:
+    max_steps: 1000
+    use_val_from_train_src: false
+    root_dir: /work/gb20/i16152/data/cryptollm
+    sources:
+      - data_final_0.5_pretrain_chunked
